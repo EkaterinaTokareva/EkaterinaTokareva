@@ -1,0 +1,156 @@
+---
+title: "Task"
+lang: russian 
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+    toc_depth: 2
+    editor_options: 
+    chunk_output_type: console
+---
+  
+  
+```{r include = FALSE}
+options(scipen=15)
+
+library(knitr)
+library(prettydoc)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(flexdashboard)
+library(plotly)
+echo=FALSE
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message = FALSE)
+
+library(streamgraph)
+library(tidyr)
+library(openxlsx)
+library(lubridate)
+```
+
+# Задание 1
+
+*Динамика потраченного общего времени в часах по дням*
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+setwd("my folder")
+
+data_1 <- read.xlsx('Задание на визуализацию.xlsx', sheet = 'Задание 1') %>%
+  select(-X6, -X7)
+data_2 <- read.xlsx('Задание на визуализацию.xlsx', sheet = 'Задание 2') %>%
+  select(-X6, -X7)
+
+#table(data_1$state_desc)
+#table(data_1$employee_type)
+#View(data_1 %>% group_by(state_desc, employee_type) %>% tally())
+
+
+data_1_dt <- data_1 %>% group_by(calendar_dt) %>% summarise(hour = sum(hours))
+ggplot(data_1_dt, aes(x = as.Date(calendar_dt), y = hour)) + 
+  geom_line(size = 1) +
+  #ggtitle('Динамика потраченного общего времени в часах по дням') +
+  xlab('Дата') +
+  ylab('Часы') + 
+  theme_minimal()
+
+data_1$day_week <- weekdays(as.Date(data_1$calendar_dt))
+data_1$hour <- hour(as.POSIXct(data_1$interval))
+
+data_1_hour <- data_1 %>% group_by(hour, day_week) %>% 
+  summarise(mean_hour = round(mean(hours),2)) %>% ungroup()
+data_1_hour$hour <- as.Date(data_1_hour$hour, origin = '0000-01-01')
+sort_day_week <- c('понедельник', 'вторник', 'среда', 'четверг',
+                   'пятница', 'суббота', 'воскресенье')
+data_1_hour <- left_join(data.frame(day_week = sort_day_week),                                          data_1_hour, by = "day_week")
+```
+
+*Усредненное потраченное время для каждого дня недели*
+
+можно выбрать на графике день недели
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data_1_hour %>% streamgraph("day_week", "mean_hour", "hour") %>%
+  sg_axis_x(24, "hour", "%d") %>%
+  sg_legend(show=TRUE, label="День недели: ")
+```
+
+*Динамика потреченного по типам работников*
+
+Если навести на легенду и нажать, то с графика можно добавить / убрать необходимые наблюдения или выделить конкретную область на самом графике. Аналогично можно применить для всех графиков ниже
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data_1_empl <- data_1 %>% group_by(calendar_dt, employee_type) %>% summarise(hours = sum(hours))
+
+plot_ly(data_1_empl %>% ungroup(), x = ~as.Date(calendar_dt), y =~hours, type = 'scatter', 
+        color =~employee_type, mode = 'lines') %>%
+  layout(yaxis = list(title = 'Затраченное время в часах'),
+         xaxis = list(title = 'Дата'))
+```
+
+*Усредненное затраченное время различных сотрудников в разбивке по часам*
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data_1_empl_1 <- data_1 %>% group_by(hour, employee_type) %>% summarise(hours = mean(hours))
+
+plot_ly(data_1_empl_1 %>% ungroup(), x = ~hour, y =~hours, type = 'scatter', 
+        color =~employee_type, mode = 'lines') %>%
+  layout(yaxis = list(title = 'Затраченное время в часах'),
+         xaxis = list(title = 'Час в сутках'))
+```
+
+
+* по выходным, общее время на звонки меньше, чем в выходные. Причем наблюдается тренд на увеличение исследуемого показателя;
+* в ночные часы (с 0:00 до 7:00) независимо от дня недели потраченного времени меньше, чем в дневные часы;
+* меньше всего времени тратят сотрудники отдела Hard PCC, у них не прослеживается тренд на увеличение затраченного времени, а также менее заметен разрыв между буднями и выходными;
+* больше всего времени тратят сотрудники отдела Hard TCRM + WO (EA);
+* самые активные отделы, которые работают в ночные часы: Light TCRM + WO(CLC) и OUI + VDI(OVO)
+
+# Задание 2
+
+*Динамика сделанных звонков*
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data_2_dt <- data_2 %>% group_by(calendar_dt, dozv_flg) %>% summarise(calls = sum(cnt_calls))
+data_2_dt %<>% spread(dozv_flg, calls)
+data_2_dt$all <- data_2_dt$`0`+data_2_dt$`1`
+data_2_dt %<>% gather(condition, calls, `0`:all, factor_key=TRUE)
+data_2_dt$type <- ifelse(data_2_dt$condition == '0', 'не дозвонились',
+                         ifelse(data_2_dt$condition == '1', 'дозвонились',
+                                'все звонки'))
+
+plot_ly(data_2_dt %>% ungroup(), x = ~as.Date(calendar_dt), y =~calls, type = 'scatter', 
+        color =~type, mode = 'lines') %>%
+  layout(yaxis = list(title = 'Количество звонков'),
+         xaxis = list(title = 'Дата'))
+```
+
+*Динамика звонков в разрезе бизнес линий*
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data_2_bl <- data_2 %>% group_by(calendar_dt, business_line) %>% summarise(calls = sum(cnt_calls))
+plot_ly(data_2_bl %>% ungroup(), x = ~as.Date(calendar_dt), y =~calls, type = 'scatter', 
+        color =~business_line, mode = 'lines') %>%
+  layout(yaxis = list(title = 'Количество звонков'),
+         xaxis = list(title = 'Дата'))
+```
+
+*Динамика звонков в разрезе источников*
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data_2_ss <- data_2 %>% group_by(calendar_dt, system_source) %>% summarise(calls = sum(cnt_calls))
+plot_ly(data_2_ss %>% ungroup(), x = ~as.Date(calendar_dt), y =~calls, type = 'scatter', 
+        color =~system_source, mode = 'lines') %>%
+  layout(yaxis = list(title = 'Количество звонков'),
+         xaxis = list(title = 'Дата'))
+```
+
+
+* сделанных звонков по выходным меньше, чем по будням;
+* в период с 25 марта по 30ого апреля, а также с 1ого по 30ого июня наблюдались периоды с возросшей активностью. Если в обычное врем accepted rate составил примерно 10,7%, то в указанные периоды - 17,4%;
+* больше всего звонков происходит по линии физических лиц (около 38% за рассматриваемый период), и рост нагрузки в пиковые периоды пришелся как раз на эту бизнес линию;
+* с начала апреля нет звонков по Бэк-офису и Вэрификации;
+* до начала локдауна было два основных источника: офис (кол-во звонков сократило в 4-5 раз) и облако, которые после локдауна остается в приоритетных источниках;
+* в апреле начали развиваться другие источники, главным из которых является VDI
+
