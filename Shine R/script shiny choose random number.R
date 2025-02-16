@@ -23,9 +23,9 @@ ui <- fluidPage(
   
   sidebarLayout(
     sidebarPanel(
-      actionButton("go", HTML('<center><FONT size="4pt">Ñãåíåðèðîâàòü</FONT></center>')),
+      actionButton("go", HTML('<center><FONT size="4pt">Generate</FONT></center>')),
       align = "center",
-      helpText(HTML('<center><FONT size="3pt">Ñëó÷àéíîå ÷èñëî:</FONT></center>'))
+      helpText(HTML('<center><FONT size="3pt">Random number:</FONT></center>'))
       ),
     column(9,
            textOutput('selected_var'
@@ -63,7 +63,7 @@ server <- function(input, output, session) {
   # image2 sends pre-rendered images
   output$image2 <- renderImage({
     list(
-        src = "C:/Users/Åêàòåðèíà/Desktop/randomaser/gener.png",
+        src = "C:/Users/EkaterinaTokareva/Desktop/randomaser/gener.png",
         contentType = "image/png"
       )
     
