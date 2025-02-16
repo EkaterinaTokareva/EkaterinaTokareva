@@ -1,0 +1,728 @@
+---
+title: "Test task Tokareva Ekaterina"
+lang: russian 
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+    toc_depth: 2
+    editor_options: 
+    chunk_output_type: console
+---
+  
+```{r include = FALSE}
+options(scipen=15)
+
+library(knitr)
+library(prettydoc)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(flexdashboard)
+library(plotly)
+library(kableExtra)
+library(highcharter)
+echo=FALSE
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message = FALSE)
+
+library(streamgraph)
+library(tidyr)
+library(openxlsx)
+```
+# 1. EDA
+
+```{r}
+setwd("my folder")
+
+data <- read.csv('obfuscated_data.csv')
+data$time <- as.POSIXct(gsub('Z', '', gsub('T', ' ', data$time_bucket)))
+data$time <- gsub('T', ' ', data$time_bucket)
+
+```
+
+Dataset has `r format(nrow(data), big.mark = ' ')` observations from `r min(data$time)` to `r max(data$time)`
+
+## Data description of all time period and per day: median, max, min
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+
+
+
+table_common <- data %>% summarise(n_merchats = n_distinct(merchant_code),
+                                   n_api = n_distinct(api_code),
+                                   status_code = n_distinct(status_code)) %>%
+  cbind(data %>% 
+          group_by(time_bucket, action, api_code, merchant_code) %>%
+          summarise(total_request = mean(total_count),
+                    error_request = sum(err_count)) %>% ungroup() %>%
+          summarise(total_request_in = sum(total_request[which(action == 'INCOMING_REQUEST')]),
+                    error_request_in = sum(error_request[which(action == 'INCOMING_REQUEST')]),
+                    
+                    total_request_out = sum(total_request[which(action == 'OUTGOING_REQUEST')]),
+                    error_request_out = sum(error_request[which(action == 'OUTGOING_REQUEST')]))) %>%
+  rbind(data %>% 
+          group_by(time_bucket, action, api_code, merchant_code) %>%
+          summarise(total_request = mean(total_count),
+                    error_request = sum(err_count)) %>% ungroup() %>%
+          group_by(as.Date(time_bucket)) %>%
+          summarise(n_merchats = n_distinct(merchant_code),
+                    n_api = n_distinct(api_code),
+                    
+                    total_request_in = sum(total_request[which(action == 'INCOMING_REQUEST')]),
+                    error_request_in = sum(error_request[which(action == 'INCOMING_REQUEST')]),
+                    
+                    total_request_out = sum(total_request[which(action == 'OUTGOING_REQUEST')]),
+                    error_request_out = sum(error_request[which(action == 'OUTGOING_REQUEST')]),
+                    ) %>%
+          inner_join(data %>% group_by(as.Date(time_bucket)) %>%
+                       summarise(status_code = n_distinct(status_code)) %>% ungroup() %>%
+                                   filter(!(`as.Date(time_bucket)` %in%
+                                              c(max(as.Date(data$time)),
+                                                min(as.Date(data$time))))),
+                     by = 'as.Date(time_bucket)') %>%
+          summarise(n_merchats = median(n_merchats),
+                    n_api = median(n_api),
+                    status_code = median(status_code),
+                    total_request_in = median(total_request_in),
+                    error_request_in = median(error_request_in),
+                    
+                    total_request_out = median(total_request_out),
+                    error_request_out = median(error_request_out))) %>%
+  ##for max
+  rbind(data %>% 
+          group_by(time_bucket, action, api_code, merchant_code) %>%
+          summarise(total_request = mean(total_count),
+                    error_request = sum(err_count)) %>% ungroup() %>%
+          group_by(as.Date(time_bucket)) %>%
+          summarise(n_merchats = n_distinct(merchant_code),
+                    n_api = n_distinct(api_code),
+                    
+                    total_request_in = sum(total_request[which(action == 'INCOMING_REQUEST')]),
+                    error_request_in = sum(error_request[which(action == 'INCOMING_REQUEST')]),
+                    
+                    total_request_out = sum(total_request[which(action == 'OUTGOING_REQUEST')]),
+                    error_request_out = sum(error_request[which(action == 'OUTGOING_REQUEST')]),
+          ) %>%
+          inner_join(data %>% group_by(as.Date(time_bucket)) %>%
+                       summarise(status_code = n_distinct(status_code)) %>% ungroup() %>%
+                       filter(!(`as.Date(time_bucket)` %in%
+                                  c(max(as.Date(data$time)),
+                                    min(as.Date(data$time))))),
+                     by = 'as.Date(time_bucket)') %>%
+          summarise(n_merchats = max(n_merchats),
+                    n_api = max(n_api),
+                    status_code = max(status_code),
+                    total_request_in = max(total_request_in),
+                    error_request_in = max(error_request_in),
+                    
+                    total_request_out = max(total_request_out),
+                    error_request_out = max(error_request_out))) %>%
+  #for min
+  rbind(data %>% 
+          group_by(time_bucket, action, api_code, merchant_code) %>%
+          summarise(total_request = mean(total_count),
+                    error_request = sum(err_count)) %>% ungroup() %>%
+          group_by(as.Date(time_bucket)) %>%
+          summarise(n_merchats = n_distinct(merchant_code),
+                    n_api = n_distinct(api_code),
+                    
+                    total_request_in = sum(total_request[which(action == 'INCOMING_REQUEST')]),
+                    error_request_in = sum(error_request[which(action == 'INCOMING_REQUEST')]),
+                    
+                    total_request_out = sum(total_request[which(action == 'OUTGOING_REQUEST')]),
+                    error_request_out = sum(error_request[which(action == 'OUTGOING_REQUEST')]),
+          ) %>%
+          inner_join(data %>% group_by(as.Date(time_bucket)) %>%
+                       summarise(status_code = n_distinct(status_code)) %>% ungroup() %>%
+                       filter(!(`as.Date(time_bucket)` %in%
+                                  c(max(as.Date(data$time)),
+                                    min(as.Date(data$time))))),
+                     by = 'as.Date(time_bucket)') %>%
+          summarise(n_merchats = min(n_merchats),
+                    n_api = min(n_api),
+                    status_code = min(status_code),
+                    total_request_in = min(total_request_in),
+                    error_request_in = min(error_request_in),
+                    
+                    total_request_out = min(total_request_out),
+                    error_request_out = min(error_request_out))) %>%
+  mutate(success_rate_in = paste0(round((total_request_in-error_request_in)/total_request_in*100, 2),'%'),
+         success_rate_out = paste0(round((total_request_out-error_request_out)/total_request_out*100, 2), '%'),
+         
+         n_api = format(n_api, big.mark = ' '),
+         total_request_in = format(as.numeric(total_request_in), big.mark = ' '),
+         error_request_in = format(as.numeric(error_request_in), big.mark = ' '),
+         total_request_out = format(as.numeric(total_request_out), big.mark = ' '),
+         error_request_out = format(as.numeric(error_request_out), big.mark = ' ')
+         ) %>% t() %>% as.data.frame()
+table_common$parameters <- rownames(table_common)
+table_common %<>% select(parameters, V1, V2, V3, V4) %>%
+  set_colnames(c('parameters', 'all data', 'median per day', 'max per day', 'min per day'))
+rownames(table_common) <- NULL
+table_common$`max per day`[which(table_common$parameters %in%
+                                   c('success_rate_in', 'success_rate_out'))] <- NA
+table_common$`min per day`[which(table_common$parameters %in%
+                                   c('success_rate_in', 'success_rate_out'))] <- NA
+kable(table_common)
+
+```
+
+Max, min, and median values don't include the first and the last dates, because the dataset doesn't have all observations.
+
+## Description data of action
+
+```{r}
+table_action <- data %>% 
+  group_by(time_bucket, action, api_code, merchant_code) %>%
+  summarise(total_request = mean(total_count),
+            error_request = sum(err_count)) %>% ungroup() %>%
+  group_by(action) %>%
+  summarise(n_merchats = n_distinct(merchant_code),
+            n_api = n_distinct(api_code)) %>%
+  inner_join(data %>% group_by(action) %>% 
+               summarise(n_status_code = n_distinct(status_code)),
+             by = 'action') %>% t() %>% as.data.frame()
+table_action$action <- rownames(table_action)
+rownames(table_action) <- NULL
+colnames(table_action) <- c('INCOMING_REQUEST', 'OUTGOING_REQUEST', 'action')
+table_action <- table_action[-1,c(3,1,2)]
+kable(table_action)
+
+```
+
+OUTGOING_REQUEST use only 2 api: api 2 (more) and api 143 and has only one status code - 400
+
+## Description data of status code
+
+```{r}
+table_code <- data %>% group_by(status_code) %>%
+  summarise(n_merchats = n_distinct(merchant_code),
+            n_api = n_distinct(api_code),
+            error_request_in = sum(err_count)) %>%
+  arrange(-error_request_in) %>% mutate(
+    n_merchats = format(n_merchats, big.mark = ' '),
+    n_api = format(n_api, big.mark = ' '),
+    error_request_in = format(error_request_in, big.mark = ' ')) %>% 
+  set_colnames(c('status code', 'count merchants', 'count api', 'count errors'))
+```
+
+It should be noticed (exclude merchant 1):
+
+* only merchant 5 and merchant 178 generate code 403
+
+* only merchant 50 and merchant 238 generate code 404
+
+* only merchant 5 generates code 405
+
+* only merchant 32 and merchant 199 generate code 502
+
+## Description data for merchants
+
+Top-5 merchants with the highest and the lowest percent of errors
+```{r}
+data_merchants <- data %>% 
+  group_by(time_bucket, action, api_code, merchant_code) %>%
+  summarise(total_request = mean(total_count),
+            error_request = sum(err_count)) %>% ungroup() %>%
+  group_by(merchant_code) %>% summarise(total_request = sum(total_request),
+                                        total_errors = sum(error_request),
+                                        error_percent = paste0(round(total_errors/total_request*100, 2), '%')) %>%
+  arrange(total_errors/total_request) 
+
+data_merchants_tops <- rbind(data_merchants %>% filter(total_request > 
+                                                         quantile(total_request, 0.35)) %>% 
+                               mutate(n = c(1:n())) %>% filter(n %in% c(1:5)) %>% 
+                               select(-n),
+                               data.frame(merchant_code = '...',
+                                          total_request = '...',
+                                          total_errors = '...',
+                                          error_percent = '...'),
+                             data_merchants %>% filter(total_request > 
+                                                         quantile(total_request, 0.35)) %>% 
+                               mutate(n = c(1:n())) %>% top_n(5, n) %>% 
+                               select(-n))
+kable(data_merchants_tops)
+
+```
+
+Only merchants who have total count requests of more than 35% quantile of total merchants1 requests were used
+
+## Questions
+ 
+* Are there any underperforming merchants in general?
+
+Yes, 5 of these merchant were shown higher. If we leave only merchants with total count of requests more than 20% quantile so we have that `r data_merchants %>% filter(total_request > quantile(data_merchants$total_request, 0.2) & total_errors / total_request > 0.99) %>% select(merchant_code) %>% n_distinct()` merchants, who have more than 99% errors: 
+
+```{r}
+data_merchants_1 <- data %>% 
+  group_by(time_bucket, action, api_code, merchant_code) %>%
+  summarise(total_request = mean(total_count),
+            error_request = sum(err_count)) %>% ungroup() %>%
+  group_by(merchant_code) %>% summarise(total_request = sum(total_request),
+                                        total_errors = sum(error_request),
+                                        error_percent = paste0(round(total_errors/total_request*100, 2), '%')) %>%
+  filter(merchant_code %in% data_merchants$merchant_code[which(data_merchants$total_request > 
+                                                                 quantile(data_merchants$total_request, 0.2) &
+                                                                 data_merchants$total_errors / 
+                                                                 data_merchants$total_request > 0.99)]) %>%
+  arrange(total_errors/total_request)
+
+kable(data_merchants_1)
+
+dataapi <- data %>% 
+  group_by(time_bucket, action, api_code, merchant_code) %>%
+  summarise(total_request = mean(total_count),
+            error_request = sum(err_count)) %>% ungroup() %>%
+  group_by(api_code) %>% summarise(total_request = sum(total_request),
+                                   total_errors = sum(error_request),
+                                   error_percent = paste0(round(total_errors/total_request*100, 2), '%')) %>%
+  arrange(total_errors/total_request)
+```
+
+* Are there any underperforming API in general?
+
+Yes, there are `r n_distinct(dataapi$api_code[which(dataapi$error_percent>99)])` api, which have more than 99% errors: 
+
+```{r}
+kable(dataapi %>% filter(api_code %in% dataapi$api_code[which(dataapi$error_percent>99)]))
+
+data_api_merchant <- data %>% 
+  group_by(time_bucket, action, api_code, merchant_code) %>%
+  summarise(total_request = mean(total_count),
+            error_request = sum(err_count)) %>% ungroup() %>%
+  group_by(api_code, merchant_code) %>% summarise(total_request = sum(total_request),
+                                   total_errors = sum(error_request),
+                                   error_percent = paste0(round(total_errors/total_request*100, 2), '%')) %>%
+  arrange(total_errors/total_request) %>% filter(merchant_code != 'MERCHANT 1')
+```
+
+* Are there any underperforming API’s and merchants combinations? (exclude merchant 1)
+
+Yes, there are `r nrow(data_api_merchant %>% filter(error_percent > 99))` api`s and merchants combinations. which have more than 99% errors
+
+```{r}
+kable(data_api_merchant %>% filter(error_percent > 99))
+
+```
+
+* is there any time dependency for above three?
+
+- Merchant 114 has more active traffic in days hour
+
+- Merchant 160 has increased traffic in 20 October
+
+- Merchant 238 has increased traffic in 16 October
+
+- Api 16, 166, 43, 96 and 37 have more active traffic in days hour
+
+- Should be researched api 270 (increased rapidly)
+
+- combination of Api 41 (avg error rate 36%) and merchant 33 (avg error rate 42%) has more active traffic in days hour
+
+- combination of Api 166 (underperforming API’s) and merchant 115 (avg error rate 18%) has more active traffic in days hour
+
+
+# Patterns in data
+
+## Hourly pattern in total requests data
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data$datehour <- as.POSIXct(format(strptime(as.POSIXct(data$time),"%Y-%m-%d%H:%M:%S"),
+                                   '%Y-%m-%d %H:00:00'))
+
+data_time_total <- data %>% group_by(time,datehour, action, api_code, merchant_code) %>%
+  summarise(total_request = mean(total_count),
+            error_request = sum(err_count),
+            quantile_9 = median(p90_lat_ps),
+            quantile_9_err = median(p90_lat_ps_err),
+            quantile_5 = median(p50_lat_ps, 0.5)) %>% ungroup() %>%
+  group_by(datehour) %>% summarise(total_request = sum(total_request),
+                                   total_errors = sum(error_request),
+                                   error_level = total_errors/total_request,
+                                   quantile_9 = median(quantile_9),
+                                   quantile_9_err = median(quantile_9_err),
+                                   quantile_5 = median(quantile_5)
+                                   )
+
+data_time_total %>% 
+     hchart(., 
+            type = "line", 
+            hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+            y = total_request)) %>% 
+  hc_title(
+    text = "Dynamics total request",
+    margin = 20,
+    align = "center",
+    style = list(color = "#22A884")
+  ) %>% 
+  hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+  hc_yAxis(title = list(text = "Requests"))
+
+plot(decompose(ts(data_time_total$total_request, frequency = 24),"additive"))
+```
+
+We can see hourly data of the total number of requests that have 24 hour frequency seasonality. In addition, we can determine the general trend of the time series, where there is an increase on 16-17 October and 23-24 October, which falls on weekends. Also, we might see than the first increase per day in 6:00-7:00 in morning and the second (larger) in 13:00-15:00
+
+## Hourly pattern in error requests data
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+
+data_time_total %>% 
+     hchart(., 
+            type = "line", 
+            hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+            y = total_errors)) %>% 
+  hc_title(
+    text = "Dynamics error request",
+    margin = 20,
+    align = "center",
+    style = list(color = "#22A884")
+  ) %>% 
+  hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+  hc_yAxis(title = list(text = "Errors"))
+
+plot(decompose(ts(data_time_total$total_errors, frequency = 24),"additive"))
+```
+
+For error data we might see 24 hour frequency too. But after 24 October errors decreased.
+
+## Hourly pattern in error/ total requests data
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+
+data_time_total %>% 
+     hchart(., 
+            type = "line", 
+            hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+            y = round(error_level*100, 2))) %>% 
+  hc_title(
+    text = "Dynamics error percent",
+    margin = 20,
+    align = "center",
+    style = list(color = "#22A884")
+  ) %>% 
+  hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+  hc_yAxis(title = list(text = "Percent"))
+
+
+plot(decompose(ts(data_time_total$error_level, frequency = 24),"additive"))
+```
+
+Before 21 of October, there is no total change in error percent of requests, but after it decreases in average and has larger dispersion.
+
+At 19:00 we can see the highest level of percent errors. After 21 October the new peak of high error level at 22:00.
+
+## Patterns in latencies
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data_time_total %>% 
+     hchart(., 
+            type = "line", 
+            hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+            y = quantile_9)) %>% 
+  hc_title(
+    text = "Dynamics 90% quantile of request latencies",
+    margin = 20,
+    align = "center",
+    style = list(color = "#22A884")
+  ) %>% 
+  hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+  hc_yAxis(title = list(text = "Seconds"))
+
+plot(decompose(ts(data_time_total$quantile_9, frequency = 24),"additive"))
+
+
+data_time_total %>% 
+     hchart(., 
+            type = "line", 
+            hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+            y = quantile_9_err)) %>% 
+  hc_title(
+    text = "Dynamics 90% quantile of error latencies",
+    margin = 20,
+    align = "center",
+    style = list(color = "#22A884")
+  ) %>% 
+  hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+  hc_yAxis(title = list(text = "Seconds"))
+
+
+plot(decompose(ts(data_time_total$quantile_9_err, frequency = 24),"additive"))
+```
+
+From 16 to 20 October 90% quantile of latencies requests and errors increased and in 20-23 of October it had peak values. 
+
+
+Dataset doesn`t have enough observations to a daily pattern (exclude increasing total requests on weekends).
+
+
+# Anomalies in data
+
+First of all, we need to check error level. Mean value +- 2 standard deviation gives 95% of all values of dataset. So we can find outliers in our data. You can see a plot with 95% interval. All values, which aren`t included in this interval, are Anomalies. They stand out by yellow point on pointing.
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data_time_total_anomalies <- data_time_total %>% select(datehour, error_level, total_errors, total_request)
+
+data_time_total_anomalies %<>%# group_by(type_day) %>% 
+  mutate(mean_error = mean(total_errors),
+         sq_error = sd(total_errors),
+         
+         mean_level_error = mean(error_level),
+         sq_level_error = sd(error_level),
+         
+         mean_request = mean(total_request),
+         sq_request = sd(total_request))
+
+
+data_time_total_anomalies$error_standput <- ifelse(data_time_total_anomalies$mean_error-2*
+                                                     data_time_total_anomalies$sq_error <
+                                                     data_time_total_anomalies$total_errors &
+                                                     data_time_total_anomalies$mean_error+2*
+                                                     data_time_total_anomalies$sq_error >
+                                                     data_time_total_anomalies$total_errors, 0, 1)
+
+data_time_total_anomalies$error_level_standput <- ifelse(data_time_total_anomalies$mean_level_error-2*
+                                                     data_time_total_anomalies$sq_level_error <
+                                                     data_time_total_anomalies$error_level &
+                                                     data_time_total_anomalies$mean_level_error+2*
+                                                     data_time_total_anomalies$sq_level_error >
+                                                     data_time_total_anomalies$error_level, 0, 1)
+
+
+data_time_total_anomalies$color <- ifelse(data_time_total_anomalies$error_level_standput == 0,
+                                          'blue', 'red')
+
+
+hchart(data_time_total_anomalies, 
+         type = "line", 
+         hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+               y = round(error_level*100, 2),
+               color = color)) %>% 
+  hc_title(
+    text = "Dynamics error percent",
+    margin = 20,
+    align = "center",
+    style = list(color = "#22A884")
+  ) %>% 
+  hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+  hc_yAxis(title = list(text = "Percent")) %>% 
+  hc_add_series(
+    data_time_total_anomalies,
+    type = "arearange",
+    name = "SE",
+    hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+          low = mean_level_error*100+2*sq_level_error*100,
+          high = mean_level_error*100-2*sq_level_error*100),
+    linkedTo = "fit", # here we link the legends in one.
+    showInLegend = FALSE,
+    color = hex_to_rgba("antiquewhite3", 0.1),  # put a semi transparent color
+    zIndex = -3 # this is for put the series in a back so the points are showed first
+  )
+
+```
+
+The list of these anomalies:
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+kable(data_time_total_anomalies %>% filter(error_level_standput == 1) %>%
+       select(datehour, error_level) %>%
+       mutate(error_level = paste0(round(error_level*100, 2), '%'))) %>%
+  kable_styling(font_size = 9)
+
+```
+
+Some anomalies of error percent are low. At first sight, it seems good, but we need to check total requests or logging.
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+data_time_total_anomalies$request_standput <- ifelse(data_time_total_anomalies$mean_request-2*
+                                                           data_time_total_anomalies$sq_request <
+                                                           data_time_total_anomalies$total_request &
+                                                           data_time_total_anomalies$mean_request+2*
+                                                           data_time_total_anomalies$sq_request >
+                                                           data_time_total_anomalies$total_request, 0, 1)
+
+hchart(data_time_total_anomalies, 
+         type = "line", 
+         hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+               y = total_request,
+               color = color)) %>% 
+    hc_title(
+      text = "Dynamics totals requests",
+      margin = 20,
+      align = "center",
+      style = list(color = "#22A884")
+    ) %>% 
+    hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+    hc_yAxis(title = list(text = "Requests")) %>% 
+    hc_add_series(
+      data_time_total_anomalies,
+      type = "arearange",
+      name = "SE",
+      hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+            low = mean_request+2*sq_request,
+            high = mean_request-2*sq_request),
+      linkedTo = "fit", # here we link the legends in one.
+      showInLegend = FALSE,
+      color = hex_to_rgba("antiquewhite3", 0.1),  # put a semi transparent color
+      zIndex = -3 # this is for put the series in a back so the points are showed first
+    )
+
+kable(data_time_total_anomalies %>% filter(request_standput == 1) %>%
+       select(datehour, total_request, error_level) %>%
+       mutate(error_level = paste0(round(error_level*100, 2), '%'))) %>%
+  kable_styling(font_size = 9)
+```
+
+As you can see, at 2021-10-24 22:00:00 the lowest level of total requests and one of the highest error level are observed.
+
+## Rule for catching anomalies in error level (hour data):
+
+* sum hour data of total requests and total errors for last 14 days (we would research needed number of days if we had more data)
+
+* count error level: total errors/total requests
+
+* count mean and standard deviance of variable
+
+* count confidence interval how mean +- 2 standard deviance (if we need error of type I error more or less than 5%, we can change calculation)
+
+* if values are more or less than the boarder of confidence interval - it should be written to common chat to check data.
+
+Moreover, it will be better to get more data and research about hours per day where more high and low values of the variable.
+
+This algorithm may be used for any variable.
+
+## Merchant report
+
+### Changing total requests
+
+It should be better to check to change total requests of merchants: (for example 3 number of the merchant who have untypical increasing or decreasing of total requests for them):
+
+```{r, fig.width=9, fig.height=4, echo=FALSE}
+
+data_time_merchant <- data %>% group_by(time,datehour, action, api_code, merchant_code) %>%
+  summarise(total_request = mean(total_count),
+            error_request = sum(err_count)) %>% ungroup() %>%
+  group_by(datehour, merchant_code) %>% summarise(total_request = sum(total_request),
+                                                  total_errors = sum(error_request),
+                                                  error_level = total_errors/total_request) %>%
+  ungroup() %>% group_by(merchant_code) %>%
+  mutate(mean_request = mean(total_request),
+         sq_request = sd(total_request),
+         
+         
+         mean_ss = mean(error_level),
+         sq_ss = sd(error_level))
+data_time_merchant$request_standput <- ifelse(data_time_merchant$mean_request-3*
+                                                data_time_merchant$sq_request <
+                                                data_time_merchant$total_request &
+                                                data_time_merchant$mean_request+3*
+                                                data_time_merchant$sq_request >
+                                                data_time_merchant$total_request, 0, 1)
+
+
+data_time_merchant$ss_standput <- ifelse(data_time_merchant$mean_ss-3*
+                                           data_time_merchant$sq_ss <
+                                           data_time_merchant$error_level &
+                                           data_time_merchant$mean_ss+3*
+                                           data_time_merchant$sq_ss >
+                                           data_time_merchant$error_level, 0, 1)
+
+
+i <- 2
+
+hchart(data_time_merchant %>%
+           filter(merchant_code == paste0('MERCHANT ', i)), 
+         type = "line", 
+         hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+               y = total_request)) %>% 
+    hc_title(
+      text = paste0("Dynamics merchant ", i," total requests"),
+      margin = 20,
+      align = "center",
+      style = list(color = "#22A884")
+    ) %>% 
+    hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+    hc_yAxis(title = list(text = "Requests")) %>% 
+    hc_add_series(
+      data_time_merchant %>%
+        filter(merchant_code == paste0('MERCHANT ', i)),
+      type = "arearange",
+      name = "SE",
+      hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+            low = max(c(mean_request-2*sq_request,0)),
+            high = mean_request+2*sq_request),
+      linkedTo = "fit", # here we link the legends in one.
+      showInLegend = FALSE,
+      color = hex_to_rgba("antiquewhite3", 0.1),  # put a semi transparent color
+      zIndex = -3 # this is for put the series in a back so the points are showed first
+    )
+
+i <- 23
+
+hchart(data_time_merchant %>%
+           filter(merchant_code == paste0('MERCHANT ', i)), 
+         type = "line", 
+         hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+               y = total_request)) %>% 
+    hc_title(
+      text = paste0("Dynamics merchant ", i," total requests"),
+      margin = 20,
+      align = "center",
+      style = list(color = "#22A884")
+    ) %>% 
+    hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+    hc_yAxis(title = list(text = "Requests")) %>% 
+    hc_add_series(
+      data_time_merchant %>%
+        filter(merchant_code == paste0('MERCHANT ', i)),
+      type = "arearange",
+      name = "SE",
+      hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+            low = max(c(mean_request-2*sq_request,0)),
+            high = mean_request+2*sq_request),
+      linkedTo = "fit", # here we link the legends in one.
+      showInLegend = FALSE,
+      color = hex_to_rgba("antiquewhite3", 0.1),  # put a semi transparent color
+      zIndex = -3 # this is for put the series in a back so the points are showed first
+    )
+
+i <- 89
+
+hchart(data_time_merchant %>%
+           filter(merchant_code == paste0('MERCHANT ', i)), 
+         type = "line", 
+         hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+               y = total_request)) %>% 
+    hc_title(
+      text = paste0("Dynamics merchant ", i," total requests"),
+      margin = 20,
+      align = "center",
+      style = list(color = "#22A884")
+    ) %>% 
+    hc_xAxis(title = list(text = "Time"), type = "datetime") %>% 
+    hc_yAxis(title = list(text = "Requests")) %>% 
+    hc_add_series(
+      data_time_merchant %>%
+        filter(merchant_code == paste0('MERCHANT ', i)),
+      type = "arearange",
+      name = "SE",
+      hcaes(x = datetime_to_timestamp(as.POSIXct(datehour)+60*60*3), 
+            low = max(c(mean_request-2*sq_request,0)),
+            high = mean_request+2*sq_request),
+      linkedTo = "fit", # here we link the legends in one.
+      showInLegend = FALSE,
+      color = hex_to_rgba("antiquewhite3", 0.1),  # put a semi transparent color
+      zIndex = -3 # this is for put the series in a back so the points are showed first
+    )
+```
+
+Moreover, it can be better to highlight the trend and seasons and use it instead of the ordinary mean value. 
+
+It was only merchants which has total requests more than 80% quantile of total datasets (for beautiful plots). But it can be shown for smaller ones.
+
+It could be a report for merchant for error level, report for API about request latencies, or report for status code for total errors
+
+
+
+
